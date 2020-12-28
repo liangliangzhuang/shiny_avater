@@ -1,0 +1,95 @@
+---
+title: "Custom cartoon avatars"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    social: menu
+    source_code: embed
+runtime: shiny
+---
+
+```{r global, include=FALSE}
+
+## 加载R包
+library(tidyverse) 
+library(imager) 
+library(scales) 
+library(packcircles) 
+library(magick)
+library(jpeg)
+## 绘制圆圈图片
+f.plot.circle = function(im){
+  ## 把图片转换为数据框
+  im.df.colour <- im %>%
+    #将Magick图像转换为cimg图像或图像列表
+    magick2imlist()%>%
+    #将magick2imlist对象转换为数据框
+    as.data.frame(wide="c") %>%
+    #对数据框重命名
+    rename(im_x=x,im_y=y) %>%
+    #将rgb颜色转化为16进制颜色
+    mutate(hex=rgb(c.1,c.2,c.3))
+  
+  
+  ## circleProgressiveLayout 函数对圆圈进行排列，使得这些圆圈两两相切,
+  ##                         这里设这些圆圈的半径服从beta分布
+  pack_layout <- circleProgressiveLayout(rbeta(2000,1,2), sizetype='area') %>% 
+    ## 设置圆圈颜色的坐标
+    mutate(im_x=floor(rescale(x,to=range(im.df.colour$im_x))),  
+           im_y=floor(rescale(y,to=range(im.df.colour$im_y))),
+           ## 指定每个圆圈的id
+           id=row_number()) %>% 
+    #同图片颜色库连接
+    inner_join(im.df.colour %>% select(im_x,im_y,hex), by=c("im_x","im_y"))
+  
+  
+  ## 以上面layout每个点为中心点，产生一组绘制圆圈的向量
+  data_gg <- circleLayoutVertices(pack_layout) %>% 
+    inner_join(pack_layout %>% select(id,hex), by=c("id"))
+  
+  ## 绘图
+  data_gg %>% 
+    ggplot(aes(x=x,y=y,group=id)) +
+    geom_polygon(aes(fill=hex)) +  
+    scale_fill_identity() + 
+    coord_equal() +
+    scale_y_reverse() +  ## you need to reverse y-axis
+    theme_void() 
+  
+}
+
+```
+
+
+Column {.sidebar}
+-----------------------------------------------------------------------
+
+```{r}
+fileInput("file1", "Choose jpg File", accept = ".jpg")
+
+```
+
+
+
+Column
+-----------------------------------------------------------------------
+
+### 原始图片
+
+```{r}
+# 绘制原始图片
+renderPlot({
+plot(image_read(readJPEG(input$file1$datapath,native=TRUE)) )
+  })
+```
+
+### 变换后的图片
+
+```{r}
+# 绘制变换后的图片
+renderPlot({
+f.plot.circle(image_read(readJPEG(input$file1$datapath,native=TRUE)) )
+  })
+
+```
+
